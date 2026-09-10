@@ -196,8 +196,8 @@ wrapper_environment() {
     SPACK_FC=$REAL_CC
     SPACK_F77=$REAL_CC
     SPACK_PREFIX=/spack-test-prefix
-    SPACK_PREFIX_MAP=/spack-test-stage/spack-src
-    SPACK_BUILD_PREFIX_MAP=/spack-test-stage/spack-build-abc1234
+    SPACK_PREFIX_MAP_ARGS='-ffile-prefix-map=/spack-test-stage/spack-src=.'
+    SPACK_BUILD_PREFIX_MAP_ARGS='-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build'
     # shellcheck disable=SC2209  # literal string "test", not the command
     SPACK_COMPILER_WRAPPER_PATH=test
     SPACK_DEBUG_LOG_DIR=.
@@ -223,7 +223,7 @@ wrapper_environment() {
 
     # shellcheck disable=SC2090
     export SPACK_CC SPACK_CXX SPACK_FC SPACK_F77 SPACK_PREFIX \
-        SPACK_PREFIX_MAP SPACK_BUILD_PREFIX_MAP \
+        SPACK_PREFIX_MAP_ARGS SPACK_BUILD_PREFIX_MAP_ARGS \
         SPACK_COMPILER_WRAPPER_PATH SPACK_DEBUG_LOG_DIR SPACK_DEBUG_LOG_ID \
         SPACK_SHORT_SPEC SPACK_SYSTEM_DIRS SPACK_MANAGED_DIRS \
         SPACK_CC_RPATH_ARG SPACK_CXX_RPATH_ARG SPACK_F77_RPATH_ARG SPACK_FC_RPATH_ARG \
@@ -1331,34 +1331,6 @@ test_add_debug_flags_validation() {
 # SPACK_PREFIX_MAP / SPACK_BUILD_PREFIX_MAP injection
 # ---------------------------------------------------------------------------
 
-test_prefix_map_required() {
-    wrapper_environment
-    unset SPACK_PREFIX_MAP
-    _out=$("$WRAPPER_DIR/cc" -c hello.c 2>&1)
-    _rc=$?
-    if [ "$_rc" -eq 0 ]; then
-        fail "prefix_map_required: expected non-zero exit when unset, got 0"
-    fi
-    case "$_out" in
-        *"compiler wrapper must be invoked from Spack"*) ;;
-        *) fail "prefix_map_required: expected mandatory-var error in: $_out" ;;
-    esac
-}
-
-test_build_prefix_map_required() {
-    wrapper_environment
-    unset SPACK_BUILD_PREFIX_MAP
-    _out=$("$WRAPPER_DIR/cc" -c hello.c 2>&1)
-    _rc=$?
-    if [ "$_rc" -eq 0 ]; then
-        fail "build_prefix_map_required: expected non-zero exit when unset, got 0"
-    fi
-    case "$_out" in
-        *"compiler wrapper must be invoked from Spack"*) ;;
-        *) fail "build_prefix_map_required: expected mandatory-var error in: $_out" ;;
-    esac
-}
-
 test_prefix_map_injected() {
     wrapper_environment
     # wrapper_environment sets:
@@ -1405,13 +1377,25 @@ test_prefix_map_dedup() {
     wrapper_environment
     # When source and build dirs coincide (in-source build), only one
     # -ffile-prefix-map flag should be emitted, not a duplicate.
-    SPACK_BUILD_PREFIX_MAP="$SPACK_PREFIX_MAP"
-    export SPACK_BUILD_PREFIX_MAP
+    SPACK_BUILD_PREFIX_MAP_ARGS="$SPACK_PREFIX_MAP_ARGS"
+    export SPACK_BUILD_PREFIX_MAP_ARGS
 
     _out=$(dump_args cc '')
-    _count=$(printf '%s\n' "$_out" | grep -Fxc -- "-ffile-prefix-map=$SPACK_PREFIX_MAP=.")
+    _count=$(printf '%s\n' "$_out" | grep -Fxc -- "$SPACK_PREFIX_MAP_ARGS")
     if [ "$_count" -ne 1 ]; then
         fail "prefix_map_dedup: expected exactly 1 occurrence, got $_count"
+    fi
+}
+
+test_prefix_map_absent_when_unsupported() {
+    wrapper_environment
+    unset SPACK_PREFIX_MAP_ARGS
+    unset SPACK_BUILD_PREFIX_MAP_ARGS
+
+    # Wrapper must still succeed and emit no -ffile-prefix-map flags at all.
+    _out=$(dump_args cc '')
+    if printf '%s\n' "$_out" | grep -qF -- '-ffile-prefix-map='; then
+        fail "prefix_map_absent_when_unsupported: flag emitted despite unset args"
     fi
 }
 
@@ -1465,10 +1449,9 @@ test_spack_managed_dirs_are_prioritized
 test_frandom_seed_not_added_without_env
 test_frandom_seed_filters_args
 test_add_debug_flags_validation
-test_prefix_map_required
-test_build_prefix_map_required
 test_prefix_map_injected
 test_prefix_map_dedup
+test_prefix_map_absent_when_unsupported
 '
 
 all_tests="$wrapper_tests $list_ops_tests"
