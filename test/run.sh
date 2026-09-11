@@ -196,6 +196,8 @@ wrapper_environment() {
     SPACK_FC=$REAL_CC
     SPACK_F77=$REAL_CC
     SPACK_PREFIX=/spack-test-prefix
+    SPACK_PREFIX_MAP=/spack-test-stage/spack-src
+    SPACK_BUILD_PREFIX_MAP=/spack-test-stage/spack-build-abc1234
     # shellcheck disable=SC2209  # literal string "test", not the command
     SPACK_COMPILER_WRAPPER_PATH=test
     SPACK_DEBUG_LOG_DIR=.
@@ -221,6 +223,7 @@ wrapper_environment() {
 
     # shellcheck disable=SC2090
     export SPACK_CC SPACK_CXX SPACK_FC SPACK_F77 SPACK_PREFIX \
+        SPACK_PREFIX_MAP SPACK_BUILD_PREFIX_MAP \
         SPACK_COMPILER_WRAPPER_PATH SPACK_DEBUG_LOG_DIR SPACK_DEBUG_LOG_ID \
         SPACK_SHORT_SPEC SPACK_SYSTEM_DIRS SPACK_MANAGED_DIRS \
         SPACK_CC_RPATH_ARG SPACK_CXX_RPATH_ARG SPACK_F77_RPATH_ARG SPACK_FC_RPATH_ARG \
@@ -376,8 +379,18 @@ LHEADERPAD='-Wl,-headerpad_max_install_names'
 HEADERPAD='-headerpad_max_install_names'
 DISABLE_NEW_DTAGS_WL='-Wl,--disable-new-dtags'
 DISABLE_NEW_DTAGS='--disable-new-dtags'
+BUILD_ID_WL='-Wl,--build-id'
+BUILD_ID='--build-id'
+
+PREFIX_MAP_FLAGS=$(cat <<'EOF'
+-ffile-prefix-map=/spack-test-stage/spack-src=.
+-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build
+EOF
+)
 
 COMMON_COMPILE_ARGS=$(concat \
+    "$PREFIX_MAP_FLAGS" \
+    "$BUILD_ID_WL" \
     "$TEST_INCLUDE_PATHS" \
     "$TEST_LIBRARY_PATHS" \
     "$DISABLE_NEW_DTAGS_WL" \
@@ -478,6 +491,7 @@ EOF
 )
     _exp=$(cat <<'EOF'
 ld
+--build-id
 --disable-new-dtags
 foo.o
 bar.o
@@ -500,7 +514,7 @@ foo
 -rpath
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
 foo.o
 bar.o
 baz.o
@@ -522,7 +536,7 @@ foo
 -Wl,-rpath
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
 foo.o
 bar.o
 baz.o
@@ -539,7 +553,7 @@ EOF
 -Wl,/c
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
 -Wl,-rpath,/a
 -Wl,-rpath,/b
 -Wl,-rpath,/c
@@ -553,12 +567,12 @@ EOF
 -Wl,--rpath=
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "-Wl,-rpath,/a")
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "-Wl,-rpath,/a")
     expect_args Wl_parsing_missing cc "$_args" "$_exp"
 
     # Wl_parsing_NAG_is_ignored
     _args='-Wl,-Wl,,x,,y,,z'
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS_FC" "$DISABLE_NEW_DTAGS_WL" "-Wl,-Wl,,x,,y,,z")
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS_FC" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "-Wl,-Wl,,x,,y,,z")
     expect_args Wl_parsing_NAG fc "$_args" "$_exp"
 
     # Xlinker_parsing
@@ -575,7 +589,7 @@ EOF
 -Xlinker
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
 -Wl,-rpath,/a
 -Wl,-rpath,/b
 -O3
@@ -593,7 +607,7 @@ EOF
 -g
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
 -O3
 -g
 -Wl,-rpath
@@ -609,7 +623,7 @@ EOF
 -g
 EOF
 )
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$DISABLE_NEW_DTAGS_WL" "$(cat <<'EOF'
 -O3
 -g
 -Xlinker
@@ -624,14 +638,14 @@ EOF
 
     # dep_include
     SPACK_INCLUDE_DIRS=x; export SPACK_INCLUDE_DIRS
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" "-Ix" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" "-Ix" \
         "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" "$TEST_WL_RPATHS" "$TEST_ARGS_NO_PATHS")
     expect_args dep_include cc "$TEST_ARGS" "$_exp"
     SPACK_INCLUDE_DIRS=''; export SPACK_INCLUDE_DIRS
 
     # dep_lib
     SPACK_LINK_DIRS=x; SPACK_RPATH_DIRS=x; export SPACK_LINK_DIRS SPACK_RPATH_DIRS
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$TEST_LIBRARY_PATHS" "-Lx" "$DISABLE_NEW_DTAGS_WL" \
         "$TEST_WL_RPATHS" "-Wl,-rpath,x" "$TEST_ARGS_NO_PATHS")
     expect_args dep_lib cc "$TEST_ARGS" "$_exp"
@@ -639,7 +653,7 @@ EOF
 
     # dep_lib_no_rpath
     SPACK_LINK_DIRS=x; export SPACK_LINK_DIRS
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$TEST_LIBRARY_PATHS" "-Lx" "$DISABLE_NEW_DTAGS_WL" \
         "$TEST_WL_RPATHS" "$TEST_ARGS_NO_PATHS")
     expect_args dep_lib_no_rpath cc "$TEST_ARGS" "$_exp"
@@ -647,7 +661,7 @@ EOF
 
     # dep_lib_no_lib
     SPACK_RPATH_DIRS=x; export SPACK_RPATH_DIRS
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" \
         "$TEST_WL_RPATHS" "-Wl,-rpath,x" "$TEST_ARGS_NO_PATHS")
     expect_args dep_lib_no_lib cc "$TEST_ARGS" "$_exp"
@@ -659,7 +673,7 @@ EOF
     SPACK_LINK_DIRS=xlib:ylib:zlib
     export SPACK_INCLUDE_DIRS SPACK_RPATH_DIRS SPACK_LINK_DIRS
 
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$(printf -- '-Ixinc\n-Iyinc\n-Izinc')" \
         "$TEST_LIBRARY_PATHS" \
         "$(printf -- '-Lxlib\n-Lylib\n-Lzlib')" \
@@ -672,7 +686,7 @@ EOF
     _args="$TEST_ARGS
 -isystem
 fooinc"
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$(printf -- '-isystem\nfooinc\n-isystem\nxinc\n-isystem\nyinc\n-isystem\nzinc')" \
         "$TEST_LIBRARY_PATHS" \
         "$(printf -- '-Lxlib\n-Lylib\n-Lzlib')" \
@@ -684,7 +698,7 @@ fooinc"
     # cc_deps (-c => mode=cc, no -L/rpath from deps)
     _args="-c
 $TEST_ARGS"
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$TEST_INCLUDE_PATHS" \
         "$(printf -- '-Ixinc\n-Iyinc\n-Izinc')" \
         "$TEST_LIBRARY_PATHS" "-c" "$TEST_ARGS_NO_PATHS")
     expect_args cc_deps cc "$_args" "$_exp"
@@ -700,7 +714,7 @@ EOF
 )
     _args="$_sys
 $TEST_ARGS"
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$(printf -- '-Ixinc\n-Iyinc\n-Izinc')" \
         "$(printf -- '-I/usr/include\n-I/usr/local/include')" \
         "$TEST_LIBRARY_PATHS" \
@@ -725,7 +739,7 @@ EOF
 )
     _args="$_sys
 $TEST_ARGS"
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" \
         "$(printf -- '-isystem\nxinc\n-isystem\nyinc\n-isystem\nzinc')" \
         "$(printf -- '-isystem\n/usr/include\n-isystem\n/usr/local/include')" \
         "$TEST_LIBRARY_PATHS" \
@@ -738,7 +752,7 @@ $TEST_ARGS"
     expect_args ccld_with_system_dirs_isystem cc "$_args" "$_exp"
 
     # ld_deps
-    _exp=$(concat "ld" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
+    _exp=$(concat "ld" "$BUILD_ID" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
         "$(printf -- '-Lxlib\n-Lylib\n-Lzlib')" \
         "$DISABLE_NEW_DTAGS" "$TEST_RPATHS" \
         "$(printf -- '-rpath\nxlib\n-rpath\nylib\n-rpath\nzlib')" \
@@ -748,7 +762,7 @@ $TEST_ARGS"
     # ld_deps_no_rpath
     unset SPACK_RPATH_DIRS
     SPACK_RPATH_DIRS=''; export SPACK_RPATH_DIRS
-    _exp=$(concat "ld" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
+    _exp=$(concat "ld" "$BUILD_ID" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
         "$(printf -- '-Lxlib\n-Lylib\n-Lzlib')" \
         "$DISABLE_NEW_DTAGS" "$TEST_RPATHS" \
         "$TEST_ARGS_NO_PATHS")
@@ -757,7 +771,7 @@ $TEST_ARGS"
     # ld_deps_no_link
     SPACK_RPATH_DIRS=xlib:ylib:zlib; export SPACK_RPATH_DIRS
     SPACK_LINK_DIRS=''; export SPACK_LINK_DIRS
-    _exp=$(concat "ld" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
+    _exp=$(concat "ld" "$BUILD_ID" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
         "$DISABLE_NEW_DTAGS" "$TEST_RPATHS" \
         "$(printf -- '-rpath\nxlib\n-rpath\nylib\n-rpath\nzlib')" \
         "$TEST_ARGS_NO_PATHS")
@@ -769,31 +783,31 @@ test_expected_args_with_flags() {
     wrapper_flags
 
     # ld_flags
-    _exp=$(concat "ld" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
+    _exp=$(concat "ld" "$BUILD_ID" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
         "$DISABLE_NEW_DTAGS" "$TEST_RPATHS" "$TEST_ARGS_NO_PATHS" "$SPACK_LDLIBS_LINES")
     expect_args ld_flags ld "$TEST_ARGS" "$_exp"
 
     # cpp_flags
-    _exp=$(concat "cpp" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
+    _exp=$(concat "cpp" "$PREFIX_MAP_FLAGS" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" \
         "$TEST_ARGS_NO_PATHS" "$SPACK_CPPFLAGS_LINES")
     expect_args cpp_flags cpp "$TEST_ARGS" "$_exp"
 
     # cc_flags
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" "-Lfoo" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" "-Lfoo" \
         "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" "$TEST_WL_RPATHS" \
         "$TEST_ARGS_NO_PATHS" "$SPACK_CPPFLAGS_LINES" "$SPACK_CFLAGS_LINES" \
         "-Wl,--gc-sections" "$SPACK_LDLIBS_LINES")
     expect_args cc_flags cc "$TEST_ARGS" "$_exp"
 
     # cxx_flags (note: -Werror is filtered by SPACK_COMPILER_FLAGS_REPLACE)
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$TEST_INCLUDE_PATHS" "-Lfoo" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" "-Lfoo" \
         "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" "$TEST_WL_RPATHS" \
         "$TEST_ARGS_NO_PATHS" "$SPACK_CPPFLAGS_LINES" \
         "-Wl,--gc-sections" "$SPACK_LDLIBS_LINES")
     expect_args cxx_flags c++ "$TEST_ARGS" "$_exp"
 
     # fc_flags
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS_FC" "$TEST_INCLUDE_PATHS" "-Lfoo" \
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS_FC" "$PREFIX_MAP_FLAGS" "$BUILD_ID_WL" "$TEST_INCLUDE_PATHS" "-Lfoo" \
         "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" "$TEST_WL_RPATHS" \
         "$TEST_ARGS_NO_PATHS" "$SPACK_FFLAGS_LINES" "$SPACK_CPPFLAGS_LINES" \
         "-Wl,--gc-sections" "$SPACK_LDLIBS_LINES")
@@ -843,7 +857,7 @@ test_ld_deps_partial() {
     SPACK_SHORT_SPEC='foo@1.2=linux-x86_64'; export SPACK_SHORT_SPEC
     _args="-r
 $TEST_ARGS"
-    _exp=$(concat "ld" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" "-Lxlib" \
+    _exp=$(concat "ld" "$BUILD_ID" "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" "-Lxlib" \
         "$DISABLE_NEW_DTAGS" "$TEST_RPATHS" "-rpath" "xlib" "-r" "$TEST_ARGS_NO_PATHS")
     expect_args ld_deps_partial_linux ld "$_args" "$_exp"
 
@@ -862,7 +876,9 @@ test_ccache_prepend_for_cc() {
     expect_args ccache_prepend_linux cc "$TEST_ARGS" "$_exp"
 
     SPACK_SHORT_SPEC='foo@1.2=darwin-x86_64'; export SPACK_SHORT_SPEC
-    _exp=$(concat "ccache" "$REAL_CC" "$TARGET_ARGS" "$LHEADERPAD" "$COMMON_COMPILE_ARGS")
+    _exp=$(concat "ccache" "$REAL_CC" "$TARGET_ARGS" "$PREFIX_MAP_FLAGS" "$LHEADERPAD" \
+        "$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" \
+        "$TEST_WL_RPATHS" "$TEST_ARGS_NO_PATHS")
     expect_args ccache_prepend_darwin cc "$TEST_ARGS" "$_exp"
 }
 
@@ -874,7 +890,9 @@ test_no_ccache_prepend_for_fc() {
     expect_args no_ccache_fc_linux fc "$TEST_ARGS" "$_exp"
 
     SPACK_SHORT_SPEC='foo@1.2=darwin-x86_64'; export SPACK_SHORT_SPEC
-    _exp=$(concat "$REAL_CC" "$TARGET_ARGS_FC" "$LHEADERPAD" "$COMMON_COMPILE_ARGS")
+    _exp=$(concat "$REAL_CC" "$TARGET_ARGS_FC" "$PREFIX_MAP_FLAGS" "$LHEADERPAD" \
+	"$TEST_INCLUDE_PATHS" "$TEST_LIBRARY_PATHS" "$DISABLE_NEW_DTAGS_WL" \
+	"$TEST_WL_RPATHS" "$TEST_ARGS_NO_PATHS")     
     expect_args no_ccache_fc_darwin fc "$TEST_ARGS" "$_exp"
 }
 
@@ -1310,6 +1328,94 @@ test_add_debug_flags_validation() {
 }
 
 # ---------------------------------------------------------------------------
+# SPACK_PREFIX_MAP / SPACK_BUILD_PREFIX_MAP injection
+# ---------------------------------------------------------------------------
+
+test_prefix_map_required() {
+    wrapper_environment
+    unset SPACK_PREFIX_MAP
+    _out=$("$WRAPPER_DIR/cc" -c hello.c 2>&1)
+    _rc=$?
+    if [ "$_rc" -eq 0 ]; then
+        fail "prefix_map_required: expected non-zero exit when unset, got 0"
+    fi
+    case "$_out" in
+        *"compiler wrapper must be invoked from Spack"*) ;;
+        *) fail "prefix_map_required: expected mandatory-var error in: $_out" ;;
+    esac
+}
+
+test_build_prefix_map_required() {
+    wrapper_environment
+    unset SPACK_BUILD_PREFIX_MAP
+    _out=$("$WRAPPER_DIR/cc" -c hello.c 2>&1)
+    _rc=$?
+    if [ "$_rc" -eq 0 ]; then
+        fail "build_prefix_map_required: expected non-zero exit when unset, got 0"
+    fi
+    case "$_out" in
+        *"compiler wrapper must be invoked from Spack"*) ;;
+        *) fail "build_prefix_map_required: expected mandatory-var error in: $_out" ;;
+    esac
+}
+
+test_prefix_map_injected() {
+    wrapper_environment
+    # wrapper_environment sets:
+    #   SPACK_PREFIX_MAP=/spack-test-stage/spack-src
+    #   SPACK_BUILD_PREFIX_MAP=/spack-test-stage/spack-build-abc1234
+
+    # Both flags must appear for C.
+    _out=$(dump_args cc '')
+    expect_contains debug_prefix_map_cc "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-src=.'
+    expect_contains debug_build_prefix_map_cc "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build'
+
+    # Both must appear for C++.
+    _out=$(dump_args c++ '')
+    expect_contains debug_prefix_map_cxx "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-src=.'
+    expect_contains debug_build_prefix_map_cxx "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build'
+
+    # Both must appear for Fortran.
+    _out=$(dump_args fc '')
+    expect_contains debug_prefix_map_fc "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-src=.'
+    expect_contains debug_build_prefix_map_fc "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build'
+
+    # Neither must appear in vcheck mode.
+    _out=$(dump_args cc '--version')
+    expect_not_contains debug_prefix_map_vcheck "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-src=.'
+    expect_not_contains debug_build_prefix_map_vcheck "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build'
+
+    # Neither must appear in plain ld mode.
+    _out=$(dump_args ld '')
+    expect_not_contains debug_prefix_map_ld "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-src=.'
+    expect_not_contains debug_build_prefix_map_ld "$_out" \
+        '-ffile-prefix-map=/spack-test-stage/spack-build-abc1234=./build'
+}
+
+test_prefix_map_dedup() {
+    wrapper_environment
+    # When source and build dirs coincide (in-source build), only one
+    # -ffile-prefix-map flag should be emitted, not a duplicate.
+    SPACK_BUILD_PREFIX_MAP="$SPACK_PREFIX_MAP"
+    export SPACK_BUILD_PREFIX_MAP
+
+    _out=$(dump_args cc '')
+    _count=$(printf '%s\n' "$_out" | grep -Fxc -- "-ffile-prefix-map=$SPACK_PREFIX_MAP=.")
+    if [ "$_count" -ne 1 ]; then
+        fail "prefix_map_dedup: expected exactly 1 occurrence, got $_count"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1359,6 +1465,10 @@ test_spack_managed_dirs_are_prioritized
 test_frandom_seed_not_added_without_env
 test_frandom_seed_filters_args
 test_add_debug_flags_validation
+test_prefix_map_required
+test_build_prefix_map_required
+test_prefix_map_injected
+test_prefix_map_dedup
 '
 
 all_tests="$wrapper_tests $list_ops_tests"

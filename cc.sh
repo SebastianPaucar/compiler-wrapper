@@ -229,6 +229,8 @@ _msg="Error: the compiler wrapper must be invoked from Spack"
 : "${SPACK_SHORT_SPEC:?$_msg}"
 : "${SPACK_SYSTEM_DIRS:?$_msg}"
 : "${SPACK_MANAGED_DIRS:?$_msg}"
+: "${SPACK_PREFIX_MAP:?$_msg}"
+: "${SPACK_BUILD_PREFIX_MAP:?$_msg}"
 unset _msg
 
 # eval this because SPACK_MANAGED_DIRS and SPACK_SYSTEM_DIRS are inputs we don't wanna loop over.
@@ -754,6 +756,16 @@ elif [ "$SPACK_ADD_DEBUG_FLAGS" = "custom" ]; then
     extend flags_list SPACK_DEBUG_FLAGS
 fi
 
+# -ffile-prefix-map=<staging>=. injection for build reproducibility
+case "$mode" in
+    cpp|as|cc|ccld)
+        append flags_list "-ffile-prefix-map=${SPACK_PREFIX_MAP}=."
+        if [ "$SPACK_BUILD_PREFIX_MAP" != "$SPACK_PREFIX_MAP" ]; then
+            append flags_list "-ffile-prefix-map=${SPACK_BUILD_PREFIX_MAP}=./build"
+        fi
+        ;;
+esac
+
 spack_flags_list=""
 
 # Fortran flags come before CPPFLAGS
@@ -827,6 +839,20 @@ if [ "$mode" = ld ] || [ "$mode" = ccld ]; then
                 append flags_list "-headerpad_max_install_names" ;;
             ccld)
                 append flags_list "-Wl,-headerpad_max_install_names" ;;
+        esac
+    fi
+fi
+
+# Enable GNU build-id notes for debuginfo auto-discovery (ELF platforms only;
+# Darwin's linker doesn't understand --build-id and macOS builds use dsymutil
+# / dSYM bundles for a comparable purpose instead).
+if [ "$mode" = ld ] || [ "$mode" = ccld ]; then
+    if [ "${SPACK_SHORT_SPEC#*darwin}" = "${SPACK_SHORT_SPEC}" ]; then
+        case "$mode" in
+            ld)
+                append flags_list "--build-id" ;;
+            ccld)
+                append flags_list "-Wl,--build-id" ;;
         esac
     fi
 fi
